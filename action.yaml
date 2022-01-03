@@ -1,0 +1,88 @@
+name: CDK Command
+description: Run CDK commands
+inputs:
+  cdk_version:
+    description: Version of CDK to Install
+    required: false
+    default: "latest"
+  cdk_language:
+    description: The language for the CDK project
+    required: false
+  cdk_subcommand:
+    description: The command to run
+    required: true
+  cdk_args:
+    description: Additional command line arguments
+    required: false
+  working_directory:
+    description: CDK Working directory
+    required: false
+  pr_comments:
+    description: Comment on PR with CDK Output
+    required: false
+    default: 'false'
+outputs:
+  status_code:
+    description: "CDK CLI exit code"
+    value: ${{ steps.cdk-command.outputs.status_code}}
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Up Node
+      uses: actions/setup-node@v2
+      with:
+        node-version: "lts/*"
+    - name: Install CDK
+      run: npm install -g aws-cdk@${{ inputs.cdk_version }}
+      shell: bash
+    - name: Config Python
+      if: ${{ inputs.cdk_language == 'python'}}
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+    - name: Config Java
+      if: ${{ inputs.cdk_language == 'java' }}
+      uses: actions/setup-java@v2
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+    - name: Config dotnet 
+      if: ${{ inputs.cdk_language == 'dotnet' }}
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: '3.1.x'
+    - name: CDK Command
+      id: cdk-command
+      run: |
+        cdk ${{inputs.cdk_subcommand}} ${{inputs.cdk_args}} 2>&1 | tee output.log
+        exitCode=${?}
+        echo "::set-output name=status_code::${exitCode}"
+      shell: bash
+    - name: PR Comment
+      if: ${{ github.event_name == 'pull_request' && inputs.pr_comments == 'true'}}
+      uses: actions/github-script@v5
+      with:
+        script: |
+          fs = require('fs');
+          fs.readFile('output.log', 'utf8', function(err, data) {
+          if (err) {
+            console.log(err);
+          }
+          const commentBody = `<details><summary>Show Output</summary>
+
+          \`\`\` 
+          Exit Code: ${{steps.cdk-command.outputs.status_code}}
+
+          Output:
+          ${data}
+          \`\`\`
+
+          </details>
+          `;
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: commentBody
+          });
+          });
