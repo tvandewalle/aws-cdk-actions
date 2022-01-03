@@ -35,7 +35,6 @@ runs:
     - name: Install CDK
       run: npm install -g aws-cdk@${{ inputs.cdk_version }}
       shell: bash
-    - name: 
     - name: Config Python
       if: ${{ inputs.cdk_language == 'python'}}
       uses: actions/setup-python@v2
